@@ -78,6 +78,7 @@ import torch
 
 import mteb
 from mteb.create_meta import generate_readme
+from mteb.benchmarks import get_benchmarks, get_benchmark
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -114,12 +115,16 @@ def run(args: argparse.Namespace) -> None:
 
     model = mteb.get_model(args.model, args.model_revision, device=device)
 
-    tasks = mteb.get_tasks(
-        categories=args.categories,
-        task_types=args.task_types,
-        languages=args.languages,
-        tasks=args.tasks,
-    )
+    if args.benchmark:
+        benchmark = get_benchmark(args.benchmark)
+        tasks = benchmark.tasks
+    else:
+        tasks = mteb.get_tasks(
+            categories=args.categories,
+            task_types=args.task_types,
+            languages=args.languages,
+            tasks=args.tasks,
+        )
     eval = mteb.MTEB(tasks=tasks)
 
     encode_kwargs = {}
@@ -199,7 +204,11 @@ def add_available_tasks_parser(subparsers) -> None:
 
 
 def add_run_parser(subparsers) -> None:
-    parser = subparsers.add_parser("run", help="Run a model on a set of tasks")
+    parser = subparsers.add_parser(
+        "run",
+        help="Run a model on a set of tasks or a predefined benchmark",
+        description="Run a model on a set of tasks or a predefined benchmark. You can specify individual tasks or use a benchmark name.",
+    )
 
     parser.add_argument(
         "-m",
@@ -259,6 +268,11 @@ def add_run_parser(subparsers) -> None:
         default=False,
         help="For retrieval tasks. Saves the predictions file in output_folder.",
     )
+    parser.add_argument(
+        "-b", "--benchmark",
+        type=str,
+        help="Name of the benchmark to run",
+    )
 
     parser.set_defaults(func=run)
 
@@ -313,6 +327,27 @@ def add_create_meta_parser(subparsers) -> None:
     parser.set_defaults(func=create_meta)
 
 
+def list_benchmarks(args):
+    benchmarks = get_benchmarks()
+    print("Available benchmarks:")
+    for benchmark in benchmarks:
+        print(f"- {benchmark.name}")
+        if args.verbose:
+            print(f"  Description: {benchmark.description}")
+            print(f"  Number of tasks: {len(benchmark.tasks)}")
+            print()
+
+
+def add_list_benchmarks_parser(subparsers) -> None:
+    benchmark_parser = subparsers.add_parser(
+        "list_benchmarks", help="List all available benchmarks"
+    )
+    benchmark_parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Show detailed information about each benchmark"
+    )
+    benchmark_parser.set_defaults(func=list_benchmarks)
+
+
 def main():
     parser = argparse.ArgumentParser(description="The MTEB Command line interface.")
 
@@ -322,6 +357,7 @@ def main():
     add_run_parser(subparsers)
     add_available_tasks_parser(subparsers)
     add_create_meta_parser(subparsers)
+    add_list_benchmarks_parser(subparsers)
 
     args = parser.parse_args()
 
